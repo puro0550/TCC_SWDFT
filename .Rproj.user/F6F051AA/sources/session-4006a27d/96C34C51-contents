@@ -1,0 +1,104 @@
+library(dplyr)
+library(signal)  # para janela de Hamming
+library(lubridate)
+library(purrr)
+library(tibble)
+library(ggplot2)
+
+dados_rad <- readRDS("rad_pronto_para_swfft.rds")
+
+swfft_radiacao_estado <- function(dados, estado_alvo, janela_horas = 8760, passo_horas = 720) {
+  # Filtrar e ordenar os dados do estado escolhido
+  dados_estado <- dados %>%
+    dplyr::filter(estado == estado_alvo, !is.na(radiacao_kjm2), flag_outlier == 0) %>%
+    dplyr::arrange(data_tempo)
+  
+  n_total <- nrow(dados_estado)
+  indices_inicio <- seq(1, n_total - janela_horas, by = passo_horas)
+  
+  resultados <- purrr::map_dfr(indices_inicio, function(i) {
+    # Verificar se há dados suficientes para a janela
+    if ((i + janela_horas - 1) > n_total) return(NULL)
+    
+    janela_dados <- dados_estado$radiacao_kjm2[i:(i + janela_horas - 1)]
+    tempo_inicio <- dados_estado$data_tempo[i]
+    
+    # Aplicar janela de Hamming
+    hamming_window <- signal::hamming(janela_horas)
+    janela_suavizada <- janela_dados * hamming_window
+    
+    # FFT e magnitude
+    espectro <- stats::fft(janela_suavizada)
+    magnitudes <- Mod(espectro)[1:(janela_horas / 2)]  # parte positiva
+    
+    tibble::tibble(
+      inicio_janela = tempo_inicio,
+      frequencia = 1:(janela_horas / 2),
+      magnitude = magnitudes
+    )
+  })
+  
+  return(resultados)
+}
+
+
+# Análise no estado do DF com janelas de 1 ano, passo mensal (~30 dias)
+harmonicos_AM <- resultado_fft_df <- swfft_radiacao_estado(
+  dados = dados_rad,
+  estado_alvo = "AM",
+  janela_horas = 8760,
+  passo_horas = 720
+)
+
+harmonicos_BA <- resultado_fft_df <- swfft_radiacao_estado(
+  dados = dados_rad,
+  estado_alvo = "AM",
+  janela_horas = 8760,
+  passo_horas = 720
+)
+
+harmonicos_DF <- resultado_fft_df <- swfft_radiacao_estado(
+  dados = dados_rad,
+  estado_alvo = "AM",
+  janela_horas = 8760,
+  passo_horas = 720
+)
+
+harmonicos_RJ <- resultado_fft_df <- swfft_radiacao_estado(
+  dados = dados_rad,
+  estado_alvo = "AM",
+  janela_horas = 8760,
+  passo_horas = 720
+)
+
+harmonicos_RS <- resultado_fft_df <- swfft_radiacao_estado(
+  dados = dados_rad,
+  estado_alvo = "AM",
+  janela_horas = 8760,
+  passo_horas = 720
+)
+
+
+plot_fft_por_janela <- function(resultados_fft, max_harmonico = 100) {
+  resultados_fft %>%
+    dplyr::filter(frequencia <= max_harmonico) %>%
+    dplyr::group_split(inicio_janela) %>%
+    purrr::map(~ {
+      janela_str <- format(.x$inicio_janela[1], "%Y-%m-%d")
+      
+      ggplot2::ggplot(.x, ggplot2::aes(x = frequencia, y = magnitude)) +
+        ggplot2::geom_line(color = "steelblue") +
+        ggplot2::labs(
+          title = paste("FFT - Início da janela:", janela_str),
+          x = "Frequência (harmônicos)",
+          y = "Magnitude"
+        ) +
+        ggplot2::theme_minimal()
+    })
+}
+
+lista_graficos_am <- plot_fft_por_janela(harmonicos_AM, max_harmonico = 100)
+lista_graficos_ba <- plot_fft_por_janela(harmonicos_BA, max_harmonico = 100)
+lista_graficos_df <- plot_fft_por_janela(harmonicos_DF, max_harmonico = 100)
+lista_graficos_rj <- plot_fft_por_janela(harmonicos_RJ, max_harmonico = 100)
+lista_graficos_rs <- plot_fft_por_janela(harmonicos_RS, max_harmonico = 100)

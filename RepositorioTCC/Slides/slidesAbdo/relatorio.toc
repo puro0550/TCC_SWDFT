@@ -1,0 +1,11 @@
+\babel@toc {brazil}{}\relax 
+\beamer@sectionintoc {1}{Ataque ao problema}{3}{0}{1}
+\beamer@sectionintoc {2}{Limpeza dos dados}{4}{0}{2}
+\beamer@subsectionintoc {2}{1}{Dados Iniciais}{4}{0}{2}
+\beamer@subsectionintoc {2}{2}{Dados da radiação}{5}{0}{2}
+\beamer@sectionintoc {3}{Primeiras análises}{7}{0}{3}
+\beamer@subsectionintoc {3}{1}{Resumo estadual}{11}{0}{3}
+\beamer@subsectionintoc {3}{2}{Visualizando NA's}{22}{0}{3}
+\beamer@subsectionintoc {3}{3}{Analisando boxplots por estado}{23}{0}{3}
+\beamer@subsectionintoc {3}{4}{Estudo do percentual de NA's}{29}{0}{3}
+\beamer@sectionintoc {4}{Considerações Finais}{35}{0}{4}
