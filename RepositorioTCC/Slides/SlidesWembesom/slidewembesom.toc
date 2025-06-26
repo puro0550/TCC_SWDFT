@@ -1,7 +1,0 @@
-\babel@toc {brazil}{}\relax 
-\beamer@sectionintoc {1}{Instituto Nacional de Metereologia (INMET)}{3}{0}{1}
-\beamer@subsectionintoc {1}{1}{INMET vs. Alternador}{3}{0}{1}
-\beamer@subsectionintoc {1}{2}{Apresentação INMET}{4}{0}{1}
-\beamer@sectionintoc {2}{Dados}{5}{0}{2}
-\beamer@subsectionintoc {2}{1}{Apresentação dos dados}{5}{0}{2}
-\beamer@sectionintoc {3}{Técnica SWFFT nos dados}{7}{0}{3}

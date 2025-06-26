@@ -1,3 +1,0 @@
-\babel@toc {brazil}{}\relax 
-\beamer@sectionintoc {1}{Boxplots antes da imputação}{3}{0}{1}
-\beamer@sectionintoc {2}{Boxplots depois da imputação}{8}{0}{2}
