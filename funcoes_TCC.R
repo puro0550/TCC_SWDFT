@@ -577,33 +577,6 @@ criar_flag_outlier_sup <- function(dados) {
   return(dados)
 }
 
-criar_flag_outlier_inf <- function(dados) {
-  # Define a hora (como número) para facilitar comparações
-  dados <- dados %>%
-    mutate(hora_utc_num = lubridate::hour(hora_utc))
-  
-  # Aplica a lógica dos horários por estado
-  dados <- dados %>%
-    mutate(flag_outlier_inf = case_when(
-      estado == "AM" & hora_utc_num %in% c(0:9) & !is.na(radiacao_kjm2) & radiacao_kjm2 > 1 ~ 1,
-      estado %in% c("BA", "DF", "RJ", "RS") & hora_utc_num %in% c(23, 0:8) & !is.na(radiacao_kjm2) & radiacao_kjm2 > 1 ~ 1,
-      TRUE ~ 0
-    ))
-  
-  # Resumo por estado
-  resumo_flags <- dados %>%
-    group_by(estado) %>%
-    summarise(qtd_flags_inf = sum(flag_outlier_inf), .groups = "drop")
-  
-  # Exibir mensagem
-  cat("------------------------------\n")
-  apply(resumo_flags, 1, function(x) {
-    cat(paste0(x[["estado"]], ": ", x[["qtd_flags_inf"]], " flags madrugada > 1 kJ/m²\n"))
-  })
-  cat("------------------------------\n")
-  
-  return(dados)
-}
 
 gerar_lista_outliers_mes_estado <- function(dados, tipo = "sup") {
   
@@ -899,56 +872,56 @@ salvar_tabelas_tex <- function(lista_tabelas, pasta_saida = "tabelas_tex") {
 
 ####-------------- função para REMOVER OUTLIERS --------------####
 limpar_radiacao_flags <- function(dados) {
-  # Contagem de flags por tipo e estado
-  resumo_sup <- dados %>%
+  # Contagem de flags por tipo e estado (apenas outliers superiores)
+  resumo <- dados %>%
     filter(flag_outlier == 1) %>%
-    count(estado, name = "sup_trocas")
-  
-  resumo_inf <- dados %>%
-    filter(flag_outlier_inf == 1) %>%
-    count(estado, name = "inf_trocas")
-  
-  # Junta os dois resumos para facilitar exibição
-  resumo <- full_join(resumo_sup, resumo_inf, by = "estado") %>%
-    mutate(across(c(sup_trocas, inf_trocas), ~replace_na(., 0))) %>%
+    count(estado, name = "sup_trocas") %>%
     arrange(estado)
   
   # Mensagens
   cat("------------------------------\n")
   cat("Outliers superiores:\n")
   resumo %>%
-    select(estado, sup_trocas) %>%
-    pmap(~cat(paste0(..1, ": ", ..2, " trocas\n")))
-  
-  cat("\nOutliers inferiores:\n")
-  resumo %>%
-    select(estado, inf_trocas) %>%
     pmap(~cat(paste0(..1, ": ", ..2, " trocas\n")))
   cat("------------------------------\n")
   
   # Substitui valores por NA
   dados %>%
-    mutate(radiacao_kjm2 = if_else(
-      flag_outlier == 1 | flag_outlier_inf == 1,
-      NA_real_,
-      radiacao_kjm2
-    ))
+    mutate(radiacao_kjm2 = if_else(flag_outlier == 1, NA_real_, radiacao_kjm2))
 }
 
 ####-------------- função para RECONSTRUIR NA'S --------------####
 # Flag para período diurno (com base no horário local)
 criar_flag_diurno <- function(dados) {
-  dados %>%
+  dados %>% 
     mutate(
-      # Ajuste de UTC para hora local (considerando fuso de cada estado)
+      # se já existir, usa; se não, cria a partir de hora_utc
+      hora_utc_num = if (!"hora_utc_num" %in% names(.)) lubridate::hour(hora_utc) else hora_utc_num,
+      
       hora_local = case_when(
         estado == "AM" ~ (hora_utc_num - 4) %% 24,
         TRUE           ~ (hora_utc_num - 3) %% 24
       ),
-      # Flag: dia entre 7h e 18h locais (inclusive)
-      flag_dia = if_else(hora_local >= 8 & hora_local <= 18, 1, 0)
+      flag_dia = if_else(hora_local >= 6 & hora_local <= 18, 1, 0)
     )
 }
+
+zerar_radiacao_noturna <- function(dados) {
+  n_trocadas <- sum(dados$flag_dia == 0)
+  
+  dados_editado <- dados %>%
+    mutate(
+      radiacao_kjm2 = if_else(flag_dia == 0, 0, radiacao_kjm2)
+    )
+  
+  cat("------------------------------\n")
+  cat("Valores noturnos substituídos por 0:", n_trocadas, "\n")
+  cat("------------------------------\n")
+  
+  dados_editado
+}
+
+
 imputar_radiacao_bootstrap <- function(dados, seed = 123, verbose = FALSE) {
   if (verbose) message("[INFO] Inicializando imputação de radiação com bootstrap...")
   

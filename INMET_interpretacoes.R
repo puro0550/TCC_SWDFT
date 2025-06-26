@@ -115,18 +115,7 @@ glimpse(dados_rad_limpeza)
 dados_rad_limpeza <- criar_flag_outlier_sup(dados_rad_limpeza)
 glimpse(dados_rad_limpeza)
 
-# Flag dos outliers que são outliers de radiação noturna
-dados_rad_limpeza <- criar_flag_outlier_inf(dados_rad_limpeza)
-glimpse(dados_rad_limpeza)
-
 lista_outliers_sup <- gerar_lista_outliers_mes_estado(dados_rad_limpeza, tipo = "sup")
-lista_outliers_inf <- gerar_lista_outliers_mes_estado(dados_rad_limpeza, tipo = "inf")
-
-# print(lista_outliers_inf$RS, n = 25)
-# print(lista_outliers_inf$RJ, n = 25)
-# print(lista_outliers_inf$DF, n = 25)
-# print(lista_outliers_inf$BA, n = 25)
-# print(lista_outliers_inf$AM, n = 25)
 
 # Trocando dados com flag de outlier por NA
 dados_rad_limpeza <- limpar_radiacao_flags(dados_rad_limpeza)
@@ -144,16 +133,15 @@ dados_rad_limpeza %>%
 dados_rad_limpeza <- criar_flag_diurno(dados_rad_limpeza)
 glimpse(dados_rad_limpeza)
 
+dados_rad_limpeza <- zerar_radiacao_noturna(dados_rad_limpeza)
+
 # Imputando valores para os NA's diurnos
 dados_rad_reconstruidos <- imputar_radiacao_bootstrap(dados_rad_limpeza, verbose = TRUE)
 glimpse(dados_rad_reconstruidos)
 
-# sum(dados_rad_reconstruidos$reconstruido)
-# 
-# histograma_radiacao_geral(dados_rad_reconstruidos, coluna = "flag_outlier", contar_na = FALSE, facet = TRUE)
-# 
-# analise_horaria_na_outliers(dados_rad_reconstruidos)
-
 boxplot_radiacao_estadual(dados_rad_reconstruidos)
 
 salvar_dados_rds(dados_rad_reconstruidos, arquivo = "rad_pronto_para_swfft.rds", compress = "xz")
+
+
+taxa_horaria_nas_after_imput <- analise_horaria_na_outliers(dados_rad_reconstruidos)
