@@ -85,11 +85,15 @@ comp_valores_max_min_lim_sup <- comparativo_limite_maximo(dados_radiacao)
 # vamos verificar a taxa de NA's e outliers por hora
 taxa_horaria_nas <- analise_horaria_na_outliers(dados_radiacao)
 
+outliers_rad_inicial <- outliers_rad_func(dados_radiacao)
+
+nas_estaduais_inicial <- percentual_na_por_estado(dados_radiacao)
 # ---------- ALGUMAS VISUALIZAÇÕES ----------
 # primeiro, vamos visualizar os boxplots de cada estado para entender como estão os dados por estado
 lista_boxplot_estadual <- boxplot_radiacao_estadual(dados_radiacao)
 lista_boxplot_estadual # Descomentar para visualizar no console
-
+boxplot_facet <- boxplot_radiacao_faceta(dados_radiacao)
+boxplot_facet
 # agora vamos visualizar os histogramas de NA
 histograma_na <- facet_histograma_radiacao_na(dados_radiacao)
 histograma_na # Descomentar para visualizar no console
@@ -101,6 +105,10 @@ histograma_na # Descomentar para visualizar no console
 # salvar_tabelas_tex(taxa_horaria_nas, pasta_saida = "tabelas_taxa_horaria_tex")
 # salvar_tabelas_tex(lims_sup_rad, pasta_saida = "tabelas_lims_sup_tex")
 # salvar_tabelas_tex(resumo_estadual_rad, pasta_saida = "tabelas_resumo_estadual_tex")
+salvar_tabela_unica_tex(outliers_rad_inicial, "tabelas_tex/tabela_resumo_radiacao.tex", caption = "Tabela da proporção de outliers por estado")
+salvar_grafico_unico_facet_pdf(grafico = boxplot_facet, nome_arquivo = "boxplot_facetas.pdf", pasta_saida = "graficos_pdf", largura = 8, altura = 5, unidades = "in", tipo = "pdf", auto_size = FALSE)
+salvar_tabela_unica_tex(nas_estaduais_inicial, "tabelas_tex/tabela_na_radiacao.tex", caption = "Tabela da proporção de NA's por estado")
+
 
 # ---------- LIMPEZA DA RADIAÇÃO ----------
 # Antes de continuar com a limpeza dos dados, vamos reservar os dados como temos agora
@@ -139,9 +147,24 @@ dados_rad_limpeza <- zerar_radiacao_noturna(dados_rad_limpeza)
 dados_rad_reconstruidos <- imputar_radiacao_bootstrap(dados_rad_limpeza, verbose = TRUE)
 glimpse(dados_rad_reconstruidos)
 
-boxplot_radiacao_estadual(dados_rad_reconstruidos)
+boxplot_reconstruido <- boxplot_radiacao_estadual(dados_rad_reconstruidos)
 
-salvar_dados_rds(dados_rad_reconstruidos, arquivo = "rad_pronto_para_swfft.rds", compress = "xz")
+salva_grafico_lista_pdf(boxplot_reconstruido, prefixo_nome = "graficos_boxplot_reconstruidos_pdf", pasta_saida = "graficos_pdf")
 
+percentual_na_pos_reconstrucao <- percentual_na_por_estado(dados_rad_reconstruidos)
+percentual_outlier_pos_reconstrucao <- outliers_rad_func(dados_rad_reconstruidos)
 
-taxa_horaria_nas_after_imput <- analise_horaria_na_outliers(dados_rad_reconstruidos)
+percentual_na_pos_reconstrucao
+percentual_outlier_pos_reconstrucao
+
+salvar_tabela_unica_tex(percentual_outlier_pos_reconstrucao, "tabelas_tex/tabela_outliers_pos_reconstrucao.tex", caption = "Tabela de proporção de outliers por estado pós reconstrução")
+
+boxplot_facetado_pos_reconstrucao <- boxplot_radiacao_faceta(dados_rad_reconstruidos)
+boxplot_facetado_pos_reconstrucao
+
+salvar_grafico_unico_facet_pdf(grafico = boxplot_facetado_pos_reconstrucao, nome_arquivo = "boxplot_facetas_pos_reconstrucao.pdf", pasta_saida = "graficos_pdf", largura = 8, altura = 5, unidades = "in", tipo = "pdf", auto_size = FALSE)
+
+# salvar_dados_rds(dados_rad_reconstruidos, arquivo = "rad_pronto_para_swfft.rds", compress = "xz")
+# 
+# 
+# taxa_horaria_nas_after_imput <- analise_horaria_na_outliers(dados_rad_reconstruidos)

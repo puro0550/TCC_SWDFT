@@ -40,6 +40,11 @@ pacotes <- c("readr", "dplyr", "purrr", "stringr", "lubridate",
              "hms", "tidyr", "ggplot2", "vroom", "janitor", "viridis", "fs", 
              "kableExtra", "future.apply", "rlang", "glue", "progressr")
 
+if ("package:signal" %in% search()) {
+  detach("package:signal", unload = TRUE, character.only = TRUE)
+}
+
+
 # Carregar (ou instalar) os pacotes com sua função
 carregar_pacotes(pacotes)
 
@@ -374,60 +379,63 @@ limpar_coluna <- function(x) {
 # }
 
 ####-------------- função para GERAR RESUMO RADIAÇÃO --------------####
-resumo_radiacao_por_estado <- function(dados, limite_superior = 1400, extrair_estado = NULL) {
-  # Calcular hora uma única vez
+resumo_radiacao_por_estado <- function(dados,
+                                       limite_superior = 1400,
+                                       extrair_estado = NULL) {
+  
   dados_com_hora <- dados %>%
-    mutate(hora_local = lubridate::hour(data_tempo))
+    dplyr::mutate(hora_local = lubridate::hour(data_tempo))
   
   resumo <- dados_com_hora %>%
-    group_by(estado, hora_local) %>%
-    summarise(
-      rad_max = suppressWarnings(max(radiacao_kjm2, na.rm = TRUE)),
-      rad_min = suppressWarnings(min(radiacao_kjm2, na.rm = TRUE)),
+    dplyr::group_by(estado, hora_local) %>%
+    dplyr::summarise(
+      rad_max     = suppressWarnings(max(radiacao_kjm2, na.rm = TRUE)),
+      rad_min     = suppressWarnings(min(radiacao_kjm2, na.rm = TRUE)),
       rad_mediana = median(radiacao_kjm2, na.rm = TRUE),
       .groups = "drop"
     ) %>%
-    mutate(
-      rad_max = ifelse(is.infinite(rad_max), NA, rad_max),
-      rad_min = ifelse(is.infinite(rad_min), NA, rad_min)
+    dplyr::mutate(
+      rad_max = dplyr::if_else(is.infinite(rad_max), NA_real_, rad_max),
+      rad_min = dplyr::if_else(is.infinite(rad_min), NA_real_, rad_min)
     )
   
   estados <- unique(resumo$estado)
   
-  lista_por_estado <- map(estados, function(uf) {
+  lista_por_estado <- purrr::map(estados, function(uf) {
     resumo_estado <- resumo %>%
-      filter(estado == uf) %>%
-      select(hora_local, rad_max, rad_min, rad_mediana)
+      dplyr::filter(estado == uf) %>%
+      dplyr::select(hora_local, rad_max, rad_min, rad_mediana)
     
     cat("### Resumo de radiação para o estado:", uf, "###\n")
     print(resumo_estado, n = 24)
     resumo_estado
-  }) %>% setNames(estados)
+  }) %>% rlang::set_names(estados)
   
   dados_alerta <- dados_com_hora %>%
-    mutate(
-      flag_erro = case_when(
+    dplyr::mutate(
+      flag_erro = dplyr::case_when(
         radiacao_kjm2 > limite_superior ~ "excessivo",
-        radiacao_kjm2 < 0 ~ "negativo",
-        TRUE ~ NA_character_
+        radiacao_kjm2 < 0               ~ "negativo",
+        TRUE                            ~ NA_character_
       )
     )
   
   if (!is.null(extrair_estado)) {
     if (!extrair_estado %in% estados) {
-      stop("Estado não encontrado: ", extrair_estado)
+      rlang::abort("Estado não encontrado: ", extrair_estado)
     }
     return(invisible(list(
       resumo_estado = lista_por_estado[[extrair_estado]],
-      alerta = dados_alerta %>% filter(estado == extrair_estado)
+      alerta        = dplyr::filter(dados_alerta, estado == extrair_estado)
     )))
   }
   
   invisible(list(
     resumo_por_estado = lista_por_estado,
-    alerta = dados_alerta
+    alerta            = dados_alerta
   ))
 }
+
 
 ####-------------- função para GERAR LIMITE SUPERIOR DO QUARTIL POR ESTADO --------------####
 limites_superiores_radiacao <- function(dados_radiacao, exibir = TRUE) {
@@ -555,6 +563,54 @@ analise_horaria_na_outliers <- function(dados_radiacao) {
   invisible(resultado)
 }
 
+percentual_na_por_estado <- function(dados) {
+  dados %>%
+    group_by(estado) %>%
+    summarise(
+      total_observacoes = n(),
+      total_na = sum(is.na(radiacao_kjm2)),
+      percentual_na = 100 * total_na / total_observacoes,
+      .groups = "drop"
+    ) %>%
+    bind_rows(
+      summarise(.,
+                estado = "Total",
+                total_observacoes = sum(total_observacoes),
+                total_na = sum(total_na),
+                percentual_na = 100 * total_na / total_observacoes
+      )
+    )
+}
+
+outliers_rad_func <- function(dados) {
+  dados %>%
+    mutate(hora_local = as.integer(format(data_tempo, "%H"))) %>%
+    group_by(estado, hora_local) %>%
+    summarise(
+      total = n(),  # inclui NA
+      q3 = quantile(radiacao_kjm2, 0.75, na.rm = TRUE),
+      iqr = IQR(radiacao_kjm2, na.rm = TRUE),
+      limite_sup = q3 + 1.5 * iqr,
+      outliers = sum(radiacao_kjm2 > limite_sup, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    group_by(estado) %>%
+    summarise(
+      total_observacoes = sum(total),
+      total_outliers = sum(outliers),
+      percentual_outliers = 100 * total_outliers / total_observacoes,
+      .groups = "drop"
+    ) %>%
+    bind_rows(
+      summarise(., 
+                estado = "Total",
+                total_observacoes = sum(total_observacoes),
+                total_outliers = sum(total_outliers),
+                percentual_outliers = 100 * total_outliers / total_observacoes
+      )
+    )
+}
+
 criar_flag_outlier_sup <- function(dados) {
   limite <- 7200
   
@@ -576,7 +632,6 @@ criar_flag_outlier_sup <- function(dados) {
   
   return(dados)
 }
-
 
 gerar_lista_outliers_mes_estado <- function(dados, tipo = "sup") {
   
@@ -793,6 +848,50 @@ boxplot_radiacao_estadual <- function(dados_radiacao) {
   return(lista_boxplots)
 }
 
+
+boxplot_radiacao_faceta <- function(dados_radiacao) {
+  dados_filtrados <- dados_radiacao %>%
+    filter(!is.na(radiacao_kjm2)) %>%
+    mutate(hora_local = lubridate::hour(data_tempo))
+  
+  limites_sup <- dados_filtrados %>%
+    group_by(estado, hora_local) %>%
+    summarise(
+      q3 = quantile(radiacao_kjm2, 0.75),
+      iqr = IQR(radiacao_kjm2),
+      limite_sup = q3 + 1.5 * iqr,
+      .groups = "drop"
+    )
+  
+  ggplot(dados_filtrados, aes(x = factor(hora_local), y = radiacao_kjm2)) +
+    geom_boxplot(
+      fill = viridis(1, begin = 0.5, end = 0.5),
+      outlier.colour = "red", outlier.alpha = 0.5
+    ) +
+    geom_text(
+      data = limites_sup,
+      aes(
+        x = factor(hora_local),
+        y = limite_sup + 50,
+        label = round(limite_sup, 0)
+      ),
+      inherit.aes = FALSE,
+      size = 2,
+      color = "gray20"
+    ) +
+    labs(
+      title = "Distribuição da Radiação Solar por Hora - Facetado por Estado",
+      x = "Hora Local",
+      y = "Radiação (kJ/m²)"
+    ) +
+    facet_wrap(~estado) +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      plot.title = element_text(face = "bold", hjust = 0.5)
+    )
+}
+
 ####-------------- funções para SALVAR dataviz --------------####
 
 salva_grafico_singular_pdf <- function(grafico, nome_arquivo = "grafico.pdf", 
@@ -851,6 +950,46 @@ salva_grafico_lista_pdf <- function(lista_graficos, prefixo_nome = "grafico", pa
   message("✅ Gráficos salvos com sucesso em: ", fs::path_abs(pasta_saida))
 }
 
+salvar_grafico_unico_facet_pdf <- function(grafico,
+                           nome_arquivo = "grafico.pdf",
+                           pasta_saida = "graficos",
+                           largura = 10,
+                           altura = 6,
+                           unidades = "in",
+                           tipo = c("pdf", "png", "jpeg"),
+                           auto_size = FALSE) {
+  
+  tipo <- match.arg(tipo)
+  
+  if (!inherits(grafico, "gg")) {
+    stop("❌ O objeto fornecido não é um gráfico ggplot válido.")
+  }
+  
+  if (!dir.exists(pasta_saida)) {
+    dir.create(pasta_saida, recursive = TRUE)
+  }
+  
+  caminho_completo <- file.path(pasta_saida, nome_arquivo)
+  
+  # Ajuste automático para gráficos grandes com muitas facetas
+  if (auto_size) {
+    n_facet <- length(unique(ggplot_build(grafico)$data[[1]]$PANEL))
+    altura <- max(altura, n_facet * 1.5 / 4)  # escala com o nº de painéis
+  }
+  
+  ggsave(
+    filename = caminho_completo,
+    plot = grafico,
+    width = largura,
+    height = altura,
+    units = unidades,
+    device = tipo
+  )
+  
+  message("✅ Gráfico salvo em: ", normalizePath(caminho_completo))
+}
+
+
 salvar_tabelas_tex <- function(lista_tabelas, pasta_saida = "tabelas_tex") {
   # Verifica e cria a pasta de saída, se necessário
   if (!dir.exists(pasta_saida)) {
@@ -869,6 +1008,17 @@ salvar_tabelas_tex <- function(lista_tabelas, pasta_saida = "tabelas_tex") {
     message("Tabela salva: ", nome_arquivo)
   })
 }
+
+salvar_tabela_unica_tex <- function(tabela, nome_arquivo, caption = NULL) {
+  dir.create(dirname(nome_arquivo), showWarnings = FALSE, recursive = TRUE)
+  
+  tabela %>%
+    kableExtra::kbl(format = "latex", booktabs = TRUE, caption = caption) %>%
+    kableExtra::save_kable(nome_arquivo)
+  
+  message("Tabela salva: ", nome_arquivo)
+}
+
 
 ####-------------- função para REMOVER OUTLIERS --------------####
 limpar_radiacao_flags <- function(dados) {
@@ -895,23 +1045,31 @@ limpar_radiacao_flags <- function(dados) {
 criar_flag_diurno <- function(dados) {
   dados %>% 
     mutate(
-      # se já existir, usa; se não, cria a partir de hora_utc
       hora_utc_num = if (!"hora_utc_num" %in% names(.)) lubridate::hour(hora_utc) else hora_utc_num,
       
       hora_local = case_when(
         estado == "AM" ~ (hora_utc_num - 4) %% 24,
         TRUE           ~ (hora_utc_num - 3) %% 24
       ),
-      flag_dia = if_else(hora_local >= 6 & hora_local <= 18, 1, 0)
+      
+      flag_nascer_por = if_else(hora_local %in% c(6, 7, 18), 1, 0),
+      flag_dia = if_else(hora_local %in% 8:17, 1, 0)
     )
 }
 
+
 zerar_radiacao_noturna <- function(dados) {
-  n_trocadas <- sum(dados$flag_dia == 0)
+  # Garante que as flags existem (evita erros caso chegue um df cru)
+  dados <- criar_flag_diurno(dados)
+  
+  # “Noturno” = nem dia nem nascer/pôr
+  n_trocadas <- sum(dados$flag_dia == 0 & dados$flag_nascer_por == 0, na.rm = TRUE)
   
   dados_editado <- dados %>%
     mutate(
-      radiacao_kjm2 = if_else(flag_dia == 0, 0, radiacao_kjm2)
+      radiacao_kjm2 = if_else(flag_dia == 0 & flag_nascer_por == 0,
+                              0,            # Zera só o realmente noturno
+                              radiacao_kjm2)
     )
   
   cat("------------------------------\n")
@@ -924,86 +1082,109 @@ zerar_radiacao_noturna <- function(dados) {
 
 imputar_radiacao_bootstrap <- function(dados, seed = 123, verbose = FALSE) {
   if (verbose) message("[INFO] Inicializando imputação de radiação com bootstrap...")
-  
   set.seed(seed)
   
-  # Configurar paralelismo
+  ## ------------------------------------------------------------------ ##
+  ## 1. Paralelismo
+  ## ------------------------------------------------------------------ ##
   if (verbose) message("[INFO] Configurando paralelismo com futuros multisession...")
   plan(multisession, workers = availableCores() - 1)
-  handlers(global = TRUE)
-  handlers("progress")
+  handlers(global = TRUE); handlers("progress")
   
   inicio <- Sys.time()
   if (verbose) message(paste0("[INFO] Início da execução: ", inicio))
   
-  # Criar flag diurno só se necessário
-  if (verbose) message("[INFO] Verificando e criando flag de período diurno, se necessário...")
-  dados_proc <- dados %>%
-    { if (!"hora_local" %in% names(.)) criar_flag_diurno(.) else . } %>%
+  ## ------------------------------------------------------------------ ##
+  ## 2. Flags (garantimos hora_local, flag_dia e flag_nascer_por)
+  ## ------------------------------------------------------------------ ##
+  dados_proc <- dados %>% 
+    { if (!all(c("hora_local", "flag_dia", "flag_nascer_por") %in% names(.)))
+      criar_flag_diurno(.)
+      else .
+    } %>% 
     mutate(
-      ano = year(data_tempo),
-      mes_dia = format(data_tempo, "%m-%d"),
+      ano      = lubridate::year(data_tempo),
+      mes_dia  = format(data_tempo, "%m-%d"),
       grupo_id = paste(estado, mes_dia, hora_local, sep = "_")
     )
   if (verbose) message("[INFO] Colunas auxiliares 'ano', 'mes_dia' e 'grupo_id' criadas.")
   
-  # Filtra NAs diurnos
-  na_diurnos <- dados_proc %>%
-    filter(flag_dia == 1, is.na(radiacao_kjm2)) %>%
-    select(grupo_id, ano)
-  if (verbose) message(paste0("[INFO] Encontrados ", nrow(na_diurnos), " valores NA no período diurno para imputação."))
+  ## ------------------------------------------------------------------ ##
+  ## 3. Conjunto de NAs a imputar  (dia normal OU nascer/pôr)
+  ## ------------------------------------------------------------------ ##
+  na_imp <- dados_proc %>% 
+    filter((flag_dia == 1 | flag_nascer_por == 1) & is.na(radiacao_kjm2)) %>% 
+    select(grupo_id, ano, usar_q1 = flag_nascer_por)
+  if (verbose) message(paste0("[INFO] Encontrados ", nrow(na_imp), " valores NA elegíveis para imputação."))
   
-  # Histórico de valores válidos
-  historico <- dados_proc %>%
-    filter(flag_dia == 1, !is.na(radiacao_kjm2)) %>%
-    group_by(grupo_id, ano) %>%
+  ## ------------------------------------------------------------------ ##
+  ## 4. Histórico de valores válidos
+  ## ------------------------------------------------------------------ ##
+  historico <- dados_proc %>% 
+    filter((flag_dia == 1 | flag_nascer_por == 1) & !is.na(radiacao_kjm2)) %>% 
+    group_by(grupo_id, ano) %>% 
     summarise(valor = first(radiacao_kjm2), .groups = "drop")
   if (verbose) message("[INFO] Construído histórico de valores válidos por grupo e ano.")
   
-  # Função interna de imputação com bootstrap adaptativo
-  imputar_grupo <- function(grupo_id, ano_ref) {
-    amostras <- historico %>%
-      filter(grupo_id == grupo_id, ano != ano_ref) %>%
+  ## ------------------------------------------------------------------ ##
+  ## 5. Função interna: bootstrap + estatística (mediana ou Q1)
+  ## ------------------------------------------------------------------ ##
+  imputar_grupo <- function(grupo_id, ano_ref, usar_q1 = FALSE) {
+    amostras <- historico %>% 
+      filter(grupo_id == grupo_id, ano != ano_ref) %>% 
       pull(valor)
+    
     n <- length(amostras)
     if (n == 0) return(NA_real_)
     if (n == 1) return(amostras[1])
+    
     n_boot <- if (n <= 12) 100 else 1000
-    median(sample(amostras, size = n_boot, replace = TRUE))
+    boot_vals <- sample(amostras, size = n_boot, replace = TRUE)
+    
+    if (usar_q1) {
+      return(as.numeric(stats::quantile(boot_vals, probs = 0.25, na.rm = TRUE)))
+    } else {
+      return(stats::median(boot_vals, na.rm = TRUE))
+    }
   }
   
+  ## ------------------------------------------------------------------ ##
+  ## 6. Imputação paralela
+  ## ------------------------------------------------------------------ ##
   if (verbose) message("[INFO] Iniciando imputação paralela com barra de progresso...")
   resultado <- with_progress({
-    p <- progressor(steps = nrow(na_diurnos))
+    p <- progressor(steps = nrow(na_imp))
     future_mapply(
-      function(g, a) {
-        p()
-        imputar_grupo(g, a)
-      },
-      na_diurnos$grupo_id,
-      na_diurnos$ano,
+      function(g, a, q1) { p(); imputar_grupo(g, a, usar_q1 = as.logical(q1)) },
+      na_imp$grupo_id,
+      na_imp$ano,
+      na_imp$usar_q1,
       future.seed = seed,
       future.packages = c("dplyr")
     )
   })
-  
-  na_diurnos$radiacao_imputada <- resultado
+  na_imp$radiacao_imputada <- resultado
   if (verbose) message("[INFO] Imputações concluídas e atribuídas.")
   
-  # Juntar imputações ao dataset original
-  dados_final <- dados_proc %>%
-    left_join(na_diurnos, by = c("grupo_id", "ano")) %>%
+  ## ------------------------------------------------------------------ ##
+  ## 7. Mesclar resultados e limpar
+  ## ------------------------------------------------------------------ ##
+  dados_final <- dados_proc %>% 
+    left_join(na_imp, by = c("grupo_id", "ano")) %>% 
     mutate(
-      radiacao_kjm2 = coalesce(radiacao_imputada, radiacao_kjm2),
-      reconstruido = as.integer(!is.na(radiacao_imputada))
-    ) %>%
+      radiacao_kjm2 = dplyr::coalesce(radiacao_imputada, radiacao_kjm2),
+      reconstruido  = as.integer(!is.na(radiacao_imputada))
+    ) %>% 
     select(-ano, -mes_dia, -grupo_id, -radiacao_imputada)
   if (verbose) message("[INFO] Dados imputados integrados ao dataset final.")
   
-  fim <- Sys.time()
+  ## ------------------------------------------------------------------ ##
+  ## 8. Encerramento
+  ## ------------------------------------------------------------------ ##
+  fim   <- Sys.time()
   tempo <- difftime(fim, inicio, units = "secs")
-  if (verbose) message(paste0("[INFO] Imputação concluída em ", round(as.numeric(tempo), 1), " segundos (", round(as.numeric(tempo)/60, 1), " min)."))
-  
+  if (verbose) message(paste0("[INFO] Imputação concluída em ", round(as.numeric(tempo), 1),
+                              " s (", round(as.numeric(tempo)/60, 1), " min)."))
   plan(sequential)
   if (verbose) message("[INFO] Plano de paralelismo resetado para sequencial.")
   
