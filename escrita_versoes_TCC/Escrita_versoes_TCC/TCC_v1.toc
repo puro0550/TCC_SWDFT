@@ -1,0 +1,51 @@
+\babel@toc {brazilian}{}\relax 
+\contentsline {section}{\numberline {1}\MakeUppercase []{Introdução e Justificativa}}{6}{section.1}%
+\contentsline {subsection}{\numberline {1.1}O que o PPC do curso diz}{9}{subsection.1.1}%
+\contentsline {section}{\numberline {2}\MakeUppercase []{Objetivos}}{10}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Objetivo Geral}{10}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Objetivos específicos}{10}{subsection.2.2}%
+\contentsline {section}{\numberline {3}\MakeUppercase []{Referencial Teórico}}{10}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Séries Temporais}{11}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Séries de Fourier}{14}{subsection.3.2}%
+\contentsline {subsubsection}{\numberline {3.2.1}A série de Fourier complexa}{17}{subsubsection.3.2.1}%
+\contentsline {subsection}{\numberline {3.3}Transformada de Fourier}{19}{subsection.3.3}%
+\contentsline {subsubsection}{\numberline {3.3.1}Transformada de Fourier Discreta}{21}{subsubsection.3.3.1}%
+\contentsline {subsection}{\numberline {3.4}SWDFT}{22}{subsection.3.4}%
+\contentsline {section}{\numberline {4}\MakeUppercase []{Metodologia}}{24}{section.4}%
+\contentsline {section}{\numberline {5}\MakeUppercase []{Cronograma}}{26}{section.5}%
+\contentsline {section}{\numberline {6}\MakeUppercase []{Resultados esperados}}{26}{section.6}%
+\contentsline {section}{Referências}{28}{section*.14}%
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
+\babel@toc {brazilian}{}\relax 
