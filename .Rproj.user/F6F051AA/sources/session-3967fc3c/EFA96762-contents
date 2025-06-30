@@ -1,0 +1,311 @@
+####-------------- Função para CARREGAR PACOTES --------------####
+carregar_pacotes <- function(pacotes) {
+  # Dicionário com descrições
+  descricoes <- list(
+    readr        = "Leitura rápida e eficiente de arquivos (ex: read_csv, read_delim).",
+    dplyr        = "Manipulação de dados (ex: mutate, filter, group_by, summarise).",
+    purrr        = "Programação funcional (ex: map, map_dfr, map_chr).",
+    stringr      = "Manipulação de strings (ex: str_detect, str_replace, str_split).",
+    lubridate    = "Manipulação de datas e tempos (ex: ymd, year, hour).",
+    hms          = "Manipulação de objetos de hora (ex: as_hms).",
+    tidyr        = "Transformação e reorganização de dados (ex: pivot_longer, fill).",
+    ggplot2      = "Visualização gráfica com uma gramática de gráficos.",
+    vroom        = "Leitura ultra-rápida de arquivos CSV/TSV.",
+    janitor      = "Limpeza de nomes de colunas e dados.",
+    viridis      = "Escalas de cores para visualização científica.",
+    fs           = "Operações de sistema de arquivos multiplataforma.",
+    kableExtra   = "Criação de tabelas elegantes para relatórios.",
+    future.apply = "Aplicação paralela de funções.",
+    rlang        = "Ferramentas avançadas para programação em tidyverse.",
+    glue         = "Interpolação de strings elegante.",
+    progressr    = "Barras de progresso para operações demoradas.",
+    signal       = "Funções para processamento de sinais (janelas, filtros).",
+    imputeTS     = "Imputação de séries temporais.",
+    slider       = "Janelas deslizantes para séries temporais."
+  )
+  
+  # Verificar pacotes ausentes
+  pacotes_faltando <- pacotes[!pacotes %in% rownames(installed.packages())]
+  
+  if (length(pacotes_faltando) > 0) {
+    message("Instalando os seguintes pacotes ausentes: ", paste(pacotes_faltando, collapse = ", "))
+    install.packages(pacotes_faltando)
+  }
+  
+  # Carregar todos os pacotes
+  invisible(lapply(pacotes, library, character.only = TRUE))
+  
+  # Mensagens de confirmação
+  message("\nPacotes carregados com sucesso:")
+  for (p in pacotes) {
+    desc <- descricoes[[p]]
+    if (!is.null(desc)) {
+      message(sprintf("- %s: %s", p, desc))
+    } else {
+      message(sprintf("- %s: (sem descrição fornecida)", p))
+    }
+  }
+}
+
+# Definir os pacotes necessários
+pacotes <- c("readr", "dplyr", "purrr", "stringr", "lubridate", "hms", "tidyr", 
+             "ggplot2", "vroom", "janitor", "viridis", "fs", "kableExtra", 
+             "future.apply", "rlang", "glue", "progressr", "signal", "imputeTS", "slider")
+
+# Carregar (ou instalar) os pacotes
+carregar_pacotes(pacotes)
+
+####-------------- Função para CARREGAR OS DADOS RDS --------------####
+carregar_dados_limpos <- function(arquivo = "rad_pronto_para_swfft.rds") {
+  # Carrega o arquivo RDS e retorna o objeto
+  readRDS(arquivo)
+}
+
+rad_limpo <- carregar_dados_limpos("rad_pronto_para_swfft.rds")
+
+####-------------- Função para SELECIONAR COLUNAS --------------####
+selector <- function(dados) {
+  dados %>%
+    dplyr::select(-flag_dia, -reconstruido, -flag_outlier, -flag_nascer_por, -usar_q1)
+}
+
+####-------------- Função para VISUALIZAR UMA SÉRIE TEMPORAL --------------####
+plotar_series_todos_estados <- function(dados,
+                                        data_inicial = "2001-01-01",
+                                        periodo = c("dia", "semana", "mes", "ano"),
+                                        primeiro_dia = FALSE) {
+  
+  periodo <- base::match.arg(periodo)
+  estados <- c("AM", "BA", "DF", "RJ", "RS")
+  
+  criar_plot_estado <- function(sigla_estado) {
+    # Definir data de início
+    if (primeiro_dia) {
+      data_start <- dados %>%
+        dplyr::filter(estado == sigla_estado) %>%
+        dplyr::summarise(primeiro = min(data)) %>%
+        dplyr::pull(primeiro)
+    } else {
+      data_start <- base::as.Date(data_inicial)
+    }
+    
+    # Calcular intervalo
+    intervalo <- switch(
+      periodo,
+      dia = c(data_start, data_start),
+      semana = c(data_start, data_start + 6),
+      mes = c(lubridate::floor_date(data_start, "month"),
+              lubridate::ceiling_date(data_start, "month") - 1),
+      ano = c(lubridate::floor_date(data_start, "year"),
+              lubridate::ceiling_date(data_start, "year") - 1)
+    )
+    
+    # Filtrar dados corretamente
+    dados_filtrados <- dados %>%
+      dplyr::filter(estado == sigla_estado,
+                    data >= intervalo[1],
+                    data <= intervalo[2])
+    
+    # Mensagem para verificar estados e datas (pode comentar depois)
+    message(glue::glue("Plotando {sigla_estado} de {intervalo[1]} a {intervalo[2]}"))
+    
+    # Plotar sem color extra
+    ggplot2::ggplot(dados_filtrados,
+                    ggplot2::aes(x = data_tempo, y = radiacao_kjm2)) +
+      ggplot2::geom_line(color = viridis::viridis(1, option = "D")) +
+      ggplot2::labs(title = paste("Radiação Solar em", sigla_estado,
+                                  "de", intervalo[1], "a", intervalo[2]),
+                    x = "Data e Hora",
+                    y = "Radiação (kJ/m²)") +
+      ggplot2::theme_minimal()
+  }
+  
+  plots <- purrr::map(estados, criar_plot_estado)
+  names(plots) <- estados
+  
+  return(plots)
+}
+
+####-------------- Função para TESTAR A FFT EM UMA JANELA --------------####
+fft_series_todos_estados <- function(dados,
+                                     data_inicial = "2001-01-01",
+                                     periodo = c("dia", "semana", "mes", "ano"),
+                                     primeiro_dia = FALSE,
+                                     grafico = TRUE) {
+  periodo <- base::match.arg(periodo)
+  estados <- c("AM", "BA", "DF", "RJ", "RS")
+  
+  # ── função interna: devolve lista(coef = vetor_complexo, plot = ggplot ou NULL) ──
+  analisar_fft_estado <- function(sigla_estado) {
+    
+    ## 1. Data inicial de referência ───────────────────────────────────────────
+    if (primeiro_dia) {
+      data_start <- dados %>%
+        dplyr::filter(estado == sigla_estado) %>%
+        dplyr::summarise(primeiro = min(data)) %>%
+        dplyr::pull(primeiro)
+    } else {
+      data_start <- base::as.Date(data_inicial)
+    }
+    
+    ## 2. Intervalo conforme período ───────────────────────────────────────────
+    intervalo <- switch(
+      periodo,
+      dia    = c(data_start, data_start),
+      semana = c(data_start, data_start + 6),
+      mes    = c(lubridate::floor_date(data_start, "month"),
+                 lubridate::ceiling_date(data_start, "month") - 1),
+      ano    = c(lubridate::floor_date(data_start, "year"),
+                 lubridate::ceiling_date(data_start, "year") - 1)
+    )
+    
+    ## 3. Sub-conjunto ordenado e vetor de radiação ────────────────────────────
+    dados_sub <- dados %>%
+      dplyr::filter(estado == sigla_estado,
+                    data >= intervalo[1],
+                    data <= intervalo[2]) %>%
+      dplyr::arrange(data_tempo)
+    
+    x <- dados_sub$radiacao_kjm2
+    n <- base::length(x)
+    
+    # se todo NA ou vetor muito curto, devolve NA
+    if (n < 4 || all(is.na(x))) {
+      return(list(coef = NA, plot = NULL))
+    }
+    
+    ## 4. Janela de Hamming + FFT ──────────────────────────────────────────────
+    janela <- 0.54 - 0.46 * base::cos(2 * base::pi * (0:(n - 1)) / (n - 1))
+    x_win <- x * janela
+    coef_fft <- stats::fft(x_win)
+    
+    ## 5. Construir gráfico, se solicitado ─────────────────────────────────────
+    grafico_fft <- NULL
+    if (grafico) {
+      # Retemos apenas 1ª metade (frequências positivas)
+      half     <- 1:(n %/% 2)
+      freq     <- (half - 1) / n          # ciclos por observação (hora)
+      amp_norm <- base::Mod(coef_fft[half]) / base::max(Mod(coef_fft[half]), na.rm = TRUE)
+      
+      df_fft <- tibble::tibble(freq, amp_norm)
+      
+      grafico_fft <- ggplot2::ggplot(df_fft,
+                                     ggplot2::aes(x = freq, y = amp_norm)) +
+        ggplot2::geom_line(colour = viridis::viridis(1, option = "D")) +
+        ggplot2::labs(title = paste("Espectro FFT –", sigla_estado),
+                      x     = "Frequência (ciclos/observação)",
+                      y     = "Amplitude normalizada") +
+        ggplot2::theme_minimal()
+    }
+    
+    ## 6. Saída para o estado ──────────────────────────────────────────────────
+    list(coef = coef_fft, plot = grafico_fft)
+  }
+  
+  # ── Executar para todos os estados ───────────────────────────────────────────
+  resultados <- purrr::map(estados, analisar_fft_estado)
+  names(resultados) <- estados
+  
+  ## Estrutura de retorno:
+  ##   resultados$AM$coef  -> vetor complexo com coeficientes da FFT
+  ##   resultados$AM$plot  -> objeto ggplot (ou NULL se grafico = FALSE)
+  resultados
+}
+
+
+####-------------- Função para APLICAR A FFT EM JANELAS NOS PERÍODOS --------------####
+fft_janelas_anuais_estados <- function(dados,
+                                       data_inicial = "2001-01-01",
+                                       data_final = NULL,
+                                       primeiro_dia = FALSE,
+                                       ultimo_dia = FALSE,
+                                       grafico = TRUE,
+                                       ov = 25) {
+  estados <- c("AM", "BA", "DF", "RJ", "RS")
+  
+  resultados_por_estado <- purrr::map(estados, function(sigla_estado) {
+    
+    ## 1. Definir datas de início e fim para o estado ──────────────────────────
+    dados_estado <- dados %>% dplyr::filter(estado == sigla_estado)
+    
+    data_start <- if (primeiro_dia) {
+      dados_estado %>% dplyr::summarise(min = min(data)) %>% dplyr::pull(min)
+    } else {
+      base::as.Date(data_inicial)
+    }
+    
+    data_end <- if (ultimo_dia) {
+      dados_estado %>% dplyr::summarise(max = max(data)) %>% dplyr::pull(max)
+    } else if (!is.null(data_final)) {
+      base::as.Date(data_final)
+    } else {
+      lubridate::ceiling_date(data_start, "year") - 1
+    }
+    
+    ## 2. Criar janelas com sobreposição de 25% ────────────────────────────────
+    janela_dias <- 365
+    overlap_dias <- base::floor(janela_dias * (ov/100)) # arredonda pra baixo se necessário para manter "dias inteiros"
+    passo <- janela_dias - overlap_dias
+    
+    datas_inicio <- seq(from = data_start,
+                        to   = data_end - lubridate::days(janela_dias - 1),
+                        by   = paste(passo, "days")) # embora as observações sejam horárias os "passos" para completar o ano são diários
+    
+    lista_dfs <- list()
+    lista_graficos <- list()
+    
+    for (i in seq_along(datas_inicio)) {
+      inicio_janela <- datas_inicio[i]
+      fim_janela <- inicio_janela + lubridate::days(janela_dias - 1)
+      
+      dados_sub <- dados_estado %>%
+        dplyr::filter(data >= inicio_janela, data <= fim_janela) %>%
+        dplyr::arrange(data_tempo)
+      
+      x <- dados_sub$radiacao_kjm2
+      n <- length(x)
+      
+      if (n < 4 || all(is.na(x))) {
+        next
+      }
+      
+      janela <- 0.54 - 0.46 * base::cos(2 * base::pi * (0:(n - 1)) / (n - 1))
+      x_win <- x * janela
+      coef_fft <- stats::fft(x_win)
+      
+      half <- 1:(n %/% 2)
+      freq <- (half - 1) / n
+      amp_norm <- base::Mod(coef_fft[half]) / base::max(Mod(coef_fft[half]), na.rm = TRUE)
+      
+      # Criação da tibble com os resultados
+      df_fft <- tibble::tibble(freq = freq, !!paste0("janela_", i) := amp_norm)
+      lista_dfs[[i]] <- df_fft
+      
+      # Opcional: salvar o gráfico
+      if (grafico) {
+        grafico_fft <- ggplot2::ggplot(df_fft,
+                                       ggplot2::aes(x = freq, y = !!rlang::sym(paste0("janela_", i)))) +
+          ggplot2::geom_line(color = viridis::viridis(1, option = "D")) +
+          ggplot2::labs(title = glue::glue("FFT – {sigla_estado} ({inicio_janela} a {fim_janela})"),
+                        x = "Frequência (ciclos/hora)",
+                        y = "Amplitude normalizada") +
+          ggplot2::theme_minimal()
+        
+        lista_graficos[[i]] <- grafico_fft
+      }
+    }
+    
+    
+    # Junta todos os dataframes por frequência
+    fft_tibble <- purrr::reduce(lista_dfs, dplyr::full_join, by = "freq")
+    
+    return(list(
+      grafico = lista_graficos,
+      fft = fft_tibble
+    ))
+    
+  })
+  
+  names(resultados_por_estado) <- estados
+  return(resultados_por_estado)
+}
