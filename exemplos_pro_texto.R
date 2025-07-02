@@ -1,0 +1,141 @@
+library(ggplot2)
+library(dplyr)
+library(tibble)
+library(viridis)
+
+# ----- Parâmetros -----
+N <- 32                # número de pontos amostrados
+t_cont <- seq(0, 1, length.out = 1000)  # tempo contínuo (para função suave)
+t_disc <- seq(0, 1 - 1/N, length.out = N)   # 0 … (N‑1)/N  ← ponto 1 fica de fora
+
+# Frequências das senoides
+f1 <- 2
+f2 <- 7
+
+# ----- 1. Definir função sintética -----
+f_cont <- sin(2 * pi * f1 * t_cont) + 0.5 * sin(2 * pi * f2 * t_cont)
+f_disc <- sin(2 * pi * f1 * t_disc) + 0.5 * sin(2 * pi * f2 * t_disc)
+
+# ----- 2. Plotar função contínua com pontos amostrados -----
+df_funcao <- tibble(t = t_cont, y = f_cont)
+df_pontos <- tibble(t = t_disc, y = f_disc)
+
+DFT <- function(f) {
+  N <- length(f)
+  m <- 0:(N - 1)
+  n <- 0:(N - 1)
+  
+  # Criar matriz de exponenciais: cada linha para um m, cada coluna para um n
+  W <- outer(m, n, function(m, n) exp(-1i * 2 * pi * m * n / N))
+  
+  # Produto matriz por vetor
+  F <- W %*% f
+  
+  return(as.vector(F))
+}
+
+
+# ----- 3. Calcular DFT com DFT -----
+X <- DFT(f_disc)
+modulo <- Mod(X) / N  # normalizado
+frequencias <- 0:(N - 1)
+
+# Manter apenas a metade até a frequência de Nyquist
+nyquist <- floor(N / 2)
+df_espectro <- tibble(frequencia = frequencias[1:nyquist], magnitude = modulo[1:nyquist])
+
+# Destacar picos (acima de um limiar ou os N maiores)
+limiar <- max(df_espectro$magnitude) * 0.95  # 95% do valor máximo
+df_espectro <- df_espectro %>%
+  mutate(destacar = magnitude >= limiar)
+
+# Depois de criar `df_espectro`
+top_n <- 2
+df_espectro <- df_espectro |>
+  mutate(destacar = rank(-magnitude, ties.method = "first") <= top_n)
+
+
+## ── Função sintética ───────────────────────────────────────────────
+funcao_sintetica <- ggplot() +
+  geom_line(data = df_funcao, aes(t, y), color = "#1f77b4", linewidth = 1.2) +
+  geom_point(data = df_pontos, aes(t, y), color = "#6baed6", size = 3) +
+  labs(title = "Função sintética com pontos amostrados",
+       x = "Tempo", y = "Valor") +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none")
+
+## ── Espectro de frequência ─────────────────────────────────────────
+espectro_da_frequencia <- ggplot(df_espectro, aes(frequencia, magnitude)) +
+  geom_line(color = "#1f77b4", linewidth = 1) +
+  geom_point(color = "#6baed6", size = 3) +
+  geom_point(data = filter(df_espectro, destacar),
+             aes(frequencia, magnitude),
+             shape = 21, size = 4, stroke = 1,
+             fill = "gold", color = "black") +
+  scale_x_continuous(breaks = df_espectro$frequencia) +
+  labs(title    = "Espectro de frequência (magnitude via DFT)",
+       subtitle = "Picos em destaque indicam harmônicos dominantes",
+       x = "Frequência (índice k)",
+       y = expression("|X"["k"]*"| (magnitude)")) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none")
+
+# Criar tibble com os 10 primeiros valores
+tibble_resultado <- tibble(
+  ponto = 0:9,
+  f_amostrado = round(f_disc[1:10], 3),
+  X_complexo = round(X[1:10], 3)
+)
+
+print(tibble_resultado)
+
+
+salvar_tabela_unica_tex <- function(tabela, nome_arquivo, caption = NULL) {
+  dir.create(dirname(nome_arquivo), showWarnings = FALSE, recursive = TRUE)
+  
+  tabela %>%
+    kableExtra::kbl(format = "latex", booktabs = TRUE, caption = caption) %>%
+    kableExtra::save_kable(nome_arquivo)
+  
+  message("Tabela salva: ", nome_arquivo)
+}
+
+salvar_tabela_unica_tex(
+  tibble_resultado,
+  "tibble_exemplo_tex.tex",
+  caption = "Primeiros 10 pontos e seus respectivos coeficientes"
+)
+
+salva_grafico_singular_pdf <- function(grafico, nome_arquivo = "grafico.pdf", 
+                                       pasta_saida = "graficos_pdf", 
+                                       largura = 8, altura = 5, unidades = "in") {
+  # Cria a pasta de saída se não existir
+  if (!dir.exists(pasta_saida)) {
+    dir.create(pasta_saida, recursive = TRUE)
+  }
+  
+  # Caminho completo para salvar
+  caminho_completo <- file.path(pasta_saida, nome_arquivo)
+  
+  # Salvar o gráfico
+  ggsave(
+    filename = caminho_completo,
+    plot = grafico,
+    width = largura,
+    height = altura,
+    units = unidades,
+    device = "pdf"
+  )
+  
+  message("✅ Gráfico salvo em: ", normalizePath(caminho_completo))
+}
+
+espectro_da_frequencia
+funcao_sintetica
+# salvar_tabela_unica_tex
+salva_grafico_singular_pdf(espectro_da_frequencia, nome_arquivo = "espectro_da_frequencia_exemplo.pdf", pasta_saida = "graficos_pdf", 
+                            largura = 8, altura = 5, unidades = "in")
+salva_grafico_singular_pdf(funcao_sintetica, nome_arquivo = "funcao_sintetica_exemplo.pdf", pasta_saida = "graficos_pdf", 
+                           largura = 8, altura = 5, unidades = "in")
+
+

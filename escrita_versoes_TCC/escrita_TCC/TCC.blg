@@ -1,0 +1,15 @@
+[0] Config.pm:308> INFO - This is Biber 2.20
+[0] Config.pm:311> INFO - Logfile is 'TCC.blg'
+[158] biber-MSWIN64:340> INFO - === 
+[271] Biber.pm:420> INFO - Reading 'TCC.bcf'
+[513] Biber.pm:994> INFO - Found 34 citekeys in bib section 0
+[543] Biber.pm:4463> INFO - Processing section 0
+[565] Biber.pm:4654> INFO - Looking for bibtex file 'referencias.bib' for section 0
+[680] bibtex.pm:1713> INFO - LaTeX decoding ...
+[773] bibtex.pm:1519> INFO - Found BibTeX data source 'referencias.bib'
+[1190] UCollate.pm:68> INFO - Overriding locale 'pt-BR' defaults 'variable = shifted' with 'variable = non-ignorable'
+[1190] UCollate.pm:68> INFO - Overriding locale 'pt-BR' defaults 'normalization = NFD' with 'normalization = prenormalized'
+[1190] Biber.pm:4283> INFO - Sorting list 'nty/global//global/global/global' of type 'entry' with template 'nty' and locale 'pt-BR'
+[1191] Biber.pm:4289> INFO - No sort tailoring available for locale 'pt-BR'
+[1246] bbl.pm:676> INFO - Writing 'TCC.bbl' with encoding 'UTF-8'
+[1277] bbl.pm:779> INFO - Output to TCC.bbl

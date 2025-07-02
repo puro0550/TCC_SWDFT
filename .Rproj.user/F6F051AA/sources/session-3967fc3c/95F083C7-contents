@@ -1,8 +1,0 @@
-nome_para_pdf <- function(frase) {
-  frase |>
-    tolower() |>                                   # Coloca tudo em minúsculas
-    gsub("[^a-z0-9 ]", "", x = _) |>               # Remove caracteres especiais
-    gsub("\\s+", "_", x = _)                       # Substitui espaços por underscores
-}
-
-nome_para_pdf("Efficient method for forecasting solar irradiance - a review ")
